@@ -9,19 +9,26 @@ main(int argc, char *argv[])
   int i;
   char *nargv[MAXARG];
 
-  if(argc < 3 || (argv[1][0] < '0' || argv[1][0] > '9')){
-    fprintf(2, "Usage: %s sys_call_num command\n", argv[0]);
+  int ticket = atoi(argv[1]);
+  if(ticket == 0) {
+    fprintf(2, "Usage: %s num_of_tickets [num_of_tickets > 0]\n", argv[0]);
     exit(1);
   }
 
-  if (trace(atoi(argv[1])) < 0) {
-    fprintf(2, "%s: trace failed\n", argv[0]);
+  // handle negative number of tickets
+
+  
+
+  if (setticket(ticket)) < 0) {
+    fprintf(2, "%s: ticket set failed\n", argv[0]);
     exit(1);
   }
+
+  while(1);
   
-  for(i = 2; i < argc && i < MAXARG; i++){
-    nargv[i-2] = argv[i];
-  }
-  exec(nargv[0], nargv);
+  // for(i = 2; i < argc && i < MAXARG; i++){
+  //   nargv[i-2] = argv[i];
+  // }
+  // exec(nargv[0], nargv);
   exit(0);
 }

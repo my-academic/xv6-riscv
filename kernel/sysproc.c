@@ -89,3 +89,13 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_setticket(void)
+{
+  struct proc *p = myproc();
+  int ticket;
+  argint(1, &ticket);
+  return setticket(p, ticket);
+  
+}

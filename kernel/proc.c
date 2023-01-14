@@ -701,3 +701,10 @@ procdump(void)
     printf("\n");
   }
 }
+
+int setticket(struct proc *p, int ticket) {
+  // check for negative ticket
+  if(ticket < 0) return -1;
+  p->original_ticket = ticket;
+  return 0;
+}
