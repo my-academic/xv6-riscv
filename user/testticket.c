@@ -3,29 +3,29 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
   // int i;
   // char *nargv[MAXARG];
 
   int ticket = atoi(argv[1]);
-  if(ticket == 0) {
+  if (ticket == 0)
+  {
     fprintf(2, "Usage: %s num_of_tickets [num_of_tickets > 0]\n", argv[0]);
     exit(1);
   }
 
   // handle negative number of tickets
-
-  
-
-  if (setticket(ticket) < 0) {
+  if (setticket(ticket) < 0)
+  {
     fprintf(2, "%s: ticket set failed\n", argv[0]);
     exit(1);
   }
 
+  // sleep(10);
+  // printf("testticket exiting\n");
+
   while(1);
-  
   // for(i = 2; i < argc && i < MAXARG; i++){
   //   nargv[i-2] = argv[i];
   // }

@@ -191,4 +191,4 @@ void            virtio_disk_intr(void);
 
 // my functions
 int setticket(struct proc *, int);
-int getpinfo(struct pstat *);
+int getpinfo(uint64);

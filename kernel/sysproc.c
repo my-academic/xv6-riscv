@@ -95,7 +95,7 @@ sys_setticket(void)
 {
   struct proc *p = myproc();
   int ticket;
-  argint(1, &ticket);
+  argint(0, &ticket);
   return setticket(p, ticket);
   
 }
@@ -103,8 +103,9 @@ sys_setticket(void)
 uint64
 sys_getpinfo(void)
 {
-  struct proc *p;
-  argaddr(1, p);
-  return getpinfo(p);
+  uint64 addr;
+  argaddr(0, &addr);
+  // printf("%d\n", aa);
+  return getpinfo(addr);
   
 }

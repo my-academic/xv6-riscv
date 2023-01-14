@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -47,6 +48,7 @@ proc_mapstacks(pagetable_t kpgtbl)
 void
 procinit(void)
 {
+  printf("procinit\n");
   struct proc *p;
   
   initlock(&pid_lock, "nextpid");
@@ -54,6 +56,8 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
+      p->original_ticket =  100;
+      p->current_ticket =  100;
       p->kstack = KSTACK((int) (p - proc));
   }
 }
@@ -109,6 +113,7 @@ allocpid()
 static struct proc*
 allocproc(void)
 {
+  printf("allocproc\n");
   struct proc *p;
 
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -170,7 +175,7 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
   p->original_ticket = 100;
-  p->current_ticket = 0;
+  p->current_ticket = 100;
   p->time_slice = 0;
 }
 
@@ -282,6 +287,7 @@ growproc(int n)
 int
 fork(void)
 {
+  printf("fork\n");
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
@@ -324,7 +330,7 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
-  np->current_ticket = 0;
+  np->current_ticket = np->original_ticket;
   np->time_slice = 0;
   // pstat.pid[]
   release(&np->lock);
@@ -444,10 +450,10 @@ wait(uint64 addr)
   }
 }
 
-float randomNumber(int seed)
+uint64 randomNumber(uint64 seed, uint64 multiplier) 
 {
-  int a = seed * 15485863;
-  return (a * a * a % 2038074743) / 2038074743.0;
+  uint64 a = seed * 14567;
+  return (a * a * a % 2038074743) * multiplier / 2038074743;
   // return a;
 }
 
@@ -462,46 +468,69 @@ void
 scheduler(void)
 {
   struct proc *p;
+  struct proc *pr;
   struct cpu *c = mycpu();
   
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    // printf("scheduler");
     int total_ticket = 0;
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
-      total_ticket += p->current_ticket;
+      total_ticket += (p->state == UNUSED ? 0 : p->current_ticket);
       release(&p->lock);
     }
-    
-    float random = randomNumber(total_ticket);
-    float probability_till_now = 0;
-    // printf("random = %d\n", random);
 
-    for(p = proc; p < &proc[NPROC]; p++) {
+    uint64 multiplier = 100;
+    int random = randomNumber(total_ticket, multiplier);
+    int probability_till_now = 0;
+    // printf("total ticket = %d\n", total_ticket );
+
+    for(p = proc, pr = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      probability_till_now += ((float)p->current_ticket / total_ticket);
-      if(random < probability_till_now && (p->state == RUNNABLE || p->state == RUNNING)) {
-        p->state = RUNNING;
-        p->time_slice++;
-        p->current_ticket--;
-        p->current_ticket = p->current_ticket <= 0 ? p->original_ticket : p->current_ticket;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+      if((p->state == RUNNABLE || p->state == RUNNING)) {
+        pr = p;
+      }
+      probability_till_now += p->current_ticket * multiplier / total_ticket;
+
+      release(&p->lock);
+      // printf("%d %d %d %d\n", p->current_ticket, probability_till_now, random, p->state);
+      if( (random < probability_till_now)) {
+        // printf("in %d\n", pr->current_ticket);
+        acquire(&pr->lock);
+        pr->state = RUNNING;
+        pr->time_slice++;
+        pr->current_ticket--;
+        pr->current_ticket = pr->current_ticket <= 1 ? pr->original_ticket : pr->current_ticket;
+        c->proc = pr;
+        swtch(&c->context, &pr->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
+        release(&pr->lock);
+        break;
       }
       // if(p->state == RUNNABLE) {
       //   // Switch to chosen process.  It is the process's job
       //   // to release its lock and then reacquire it
-      //   // before jumping back to us.
+      //   // before jumping back to us.p->state = RUNNING;
+      //   p->time_slice++;
+      //   p->current_ticket--;
+      //   p->current_ticket = p->current_ticket <= 0 ? p->original_ticket : p->current_ticket;
+      //   c->proc = p;
+      //   swtch(&c->context, &p->context);
+
+      //   // Process is done running for now.
+      //   // It should have changed its p->state before coming back.
+      //   c->proc = 0;
       // }
-      release(&p->lock);
+      // release(&p->lock);
     }
+    // wait(30);
   }
 }
 
@@ -726,16 +755,23 @@ int setticket(struct proc *p, int ticket) {
   return 0;
 }
 
-int getpinfo(struct pstat *pst) {
+int getpinfo(uint64 addr) {
   int idx = 0;
+  struct pstat pstat;
+  struct proc *proc = myproc();
   for(struct proc *p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
-    pst->pid[idx] = p->pid;
-    pst->inuse[idx] = !(p->state == UNUSED) ;
-    pst->tickets_original[idx] = p->original_ticket;
-    pst->tickets_current[idx] = p->current_ticket;
-    pst->time_slices[idx] = p->time_slice;
+    // printf("%d %d\n", idx, p->pid);
+    pstat.pid[idx] = p->pid ;
+    pstat.inuse[idx] = !(p->state == UNUSED) ;
+    pstat.tickets_original[idx] = p->original_ticket;
+    pstat.tickets_current[idx] = p->current_ticket;
+    pstat.time_slices[idx] = p->time_slice;
+    idx++;
     release(&p->lock);
   }
+
+  if (copyout(proc->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0)
+    return -1;
   return 0;
 }
