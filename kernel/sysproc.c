@@ -99,3 +99,12 @@ sys_setticket(void)
   return setticket(p, ticket);
   
 }
+
+uint64
+sys_getpinfo(void)
+{
+  struct proc *p;
+  argaddr(1, p);
+  return getpinfo(p);
+  
+}

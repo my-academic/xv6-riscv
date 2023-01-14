@@ -5,9 +5,6 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-#include "pstat.h"
-
-struct pstat pstat;
 
 struct cpu cpus[NCPU];
 
@@ -172,7 +169,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
-  p->original_ticket = 10;
+  p->original_ticket = 100;
   p->current_ticket = 0;
   p->time_slice = 0;
 }
@@ -331,7 +328,7 @@ fork(void)
   np->time_slice = 0;
   // pstat.pid[]
   release(&np->lock);
-  printf("opening\n");
+  // printf("opening\n");
 
   return pid;
 }
@@ -371,7 +368,7 @@ exit(int status)
     }
   }
 
-  printf("exiting\n");
+  // printf("exiting\n");
 
   begin_op();
   iput(p->cwd);
@@ -447,10 +444,11 @@ wait(uint64 addr)
   }
 }
 
-int randomNumber()
+float randomNumber(int seed)
 {
-  srand(time(0));
-  return rand()%100;
+  int a = seed * 15485863;
+  return (a * a * a % 2038074743) / 2038074743.0;
+  // return a;
 }
 
 // Per-CPU process scheduler.
@@ -470,15 +468,26 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    int random = randomNumber();
+    int total_ticket = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      total_ticket += p->current_ticket;
+      release(&p->lock);
+    }
+    
+    float random = randomNumber(total_ticket);
+    float probability_till_now = 0;
+    // printf("random = %d\n", random);
 
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
+      probability_till_now += ((float)p->current_ticket / total_ticket);
+      if(random < probability_till_now && (p->state == RUNNABLE || p->state == RUNNING)) {
         p->state = RUNNING;
+        p->time_slice++;
+        p->current_ticket--;
+        p->current_ticket = p->current_ticket <= 0 ? p->original_ticket : p->current_ticket;
         c->proc = p;
         swtch(&c->context, &p->context);
 
@@ -486,6 +495,11 @@ scheduler(void)
         // It should have changed its p->state before coming back.
         c->proc = 0;
       }
+      // if(p->state == RUNNABLE) {
+      //   // Switch to chosen process.  It is the process's job
+      //   // to release its lock and then reacquire it
+      //   // before jumping back to us.
+      // }
       release(&p->lock);
     }
   }
@@ -705,6 +719,23 @@ procdump(void)
 int setticket(struct proc *p, int ticket) {
   // check for negative ticket
   if(ticket < 0) return -1;
+  acquire(&p->lock);
   p->original_ticket = ticket;
+  p->current_ticket = ticket;
+  release(&p->lock);
+  return 0;
+}
+
+int getpinfo(struct pstat *pst) {
+  int idx = 0;
+  for(struct proc *p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    pst->pid[idx] = p->pid;
+    pst->inuse[idx] = !(p->state == UNUSED) ;
+    pst->tickets_original[idx] = p->original_ticket;
+    pst->tickets_current[idx] = p->current_ticket;
+    pst->time_slices[idx] = p->time_slice;
+    release(&p->lock);
+  }
   return 0;
 }

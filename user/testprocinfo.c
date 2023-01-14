@@ -9,17 +9,16 @@ main(int argc, char *argv[])
   // int i;
   // char *nargv[MAXARG];
 
-  int ticket = atoi(argv[1]);
-  if(ticket == 0) {
-    fprintf(2, "Usage: %s num_of_tickets [num_of_tickets > 0]\n", argv[0]);
-    exit(1);
-  }
+//   if(ticket == 0) {
+//     fprintf(2, "Usage: %s num_of_tickets [num_of_tickets > 0]\n", argv[0]);
+//     exit(1);
+//   }
 
   // handle negative number of tickets
 
-  
+  struct pstat pstat;
 
-  if (setticket(ticket) < 0) {
+  if (getpinfo(&pstat) < 0) {
     fprintf(2, "%s: ticket set failed\n", argv[0]);
     exit(1);
   }

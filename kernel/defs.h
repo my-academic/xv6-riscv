@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct pstat;
 
 // bio.c
 void            binit(void);
@@ -190,3 +191,4 @@ void            virtio_disk_intr(void);
 
 // my functions
 int setticket(struct proc *, int);
+int getpinfo(struct pstat *);
