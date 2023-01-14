@@ -5,6 +5,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
+
+struct pstat pstat;
 
 struct cpu cpus[NCPU];
 
@@ -169,6 +172,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->original_ticket = 10;
+  p->current_ticket = 0;
+  p->time_slice = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -316,11 +322,16 @@ fork(void)
 
   acquire(&wait_lock);
   np->parent = p;
+  np->original_ticket = p->original_ticket;
   release(&wait_lock);
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->current_ticket = 0;
+  np->time_slice = 0;
+  // pstat.pid[]
   release(&np->lock);
+  printf("opening\n");
 
   return pid;
 }
@@ -359,6 +370,8 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+  printf("exiting\n");
 
   begin_op();
   iput(p->cwd);
@@ -434,6 +447,12 @@ wait(uint64 addr)
   }
 }
 
+int randomNumber()
+{
+  srand(time(0));
+  return rand()%100;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -451,6 +470,7 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    int random = randomNumber();
 
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
