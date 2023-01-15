@@ -48,7 +48,7 @@ proc_mapstacks(pagetable_t kpgtbl)
 void
 procinit(void)
 {
-  printf("procinit\n");
+  // printf("procinit\n");
   struct proc *p;
   
   initlock(&pid_lock, "nextpid");
@@ -97,7 +97,7 @@ myproc(void)
 int
 allocpid()
 {
-  printf("allocpid\n");
+  // printf("allocpid\n");
   int pid;
   
   acquire(&pid_lock);
@@ -115,13 +115,13 @@ allocpid()
 static struct proc*
 allocproc(void)
 {
-  printf("allocproc\n");
+  // printf("allocproc\n");
   struct proc *p;
 
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
-      printf("in goto\n");
+      // printf("in goto\n");
       goto found;
     } else {
       release(&p->lock);
@@ -166,7 +166,7 @@ found:
 static void
 freeproc(struct proc *p)
 {
-  printf("freeproc\n");
+  // printf("freeproc => %d\n", p->pid);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -296,7 +296,7 @@ growproc(int n)
 int
 fork(void)
 {
-  printf("fork\n");
+  // printf("fork\n");
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
@@ -794,7 +794,7 @@ int setticket(struct proc *p, int ticket) {
   if(ticket < 0) return -1;
   acquire(&p->lock);
   p->original_ticket = ticket;
-  p->current_ticket = ticket -1;
+  p->current_ticket = ticket;
   p->time_slice = 0;
   release(&p->lock);
   return 0;
@@ -803,12 +803,13 @@ int setticket(struct proc *p, int ticket) {
 int getpinfo(uint64 addr) {
   int idx = 0;
   struct pstat pstat;
-  struct proc *proc = myproc();
+  struct proc *process = myproc();
   for(struct proc *p = proc; p < &proc[NPROC]; p++){
-    printf("---\n");
+    // printf("---\n");
+      // printf("%d\t index = %d\t id = %d\t inuse = %d\t original ticket = %d\t current ticket = %d\t time slice=%d\n", nextpid, idx, p->pid, p->state, p->original_ticket, p->current_ticket, p->time_slice);
     acquire(&p->lock);
-    printf("''''''''''''\n");
-      printf("index = %d\t id = %d\t inuse = %d\t original ticket = %d\t current ticket = %d\t time slice=%d\n", idx, p->pid, p->state, p->original_ticket, p->current_ticket, p->time_slice);
+    // printf("''''''''''''\n");
+      // printf("index = %d\t id = %d\t inuse = %d\t original ticket = %d\t current ticket = %d\t time slice=%d\n", idx, p->pid, p->state, p->original_ticket, p->current_ticket, p->time_slice);
     
     pstat.pid[idx] = p->pid ;
     pstat.inuse[idx] = !(p->state == UNUSED) ;
@@ -816,17 +817,17 @@ int getpinfo(uint64 addr) {
     pstat.tickets_current[idx] = p->current_ticket;
     pstat.time_slices[idx] = p->time_slice;
     idx++;
-    printf("here\n");
+    // printf("here\n");
     release(&p->lock);
-    printf("here\n");
+    // printf("here\n");
   }
-  printf("\n\n");
-  acquire(&proc->lock);
+  // printf("\n\n");
+  acquire(&process->lock);
 
-  if (copyout(proc->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0){
-    release(&proc->lock);
+  if (copyout(process->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0){
+    release(&process->lock);
     return -1;
   }
-  release(&proc->lock);
+  release(&process->lock);
   return 0;
 }
