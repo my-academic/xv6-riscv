@@ -22,13 +22,11 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
-  // sleep(10);
-  // printf("testticket exiting\n");
 
   while(1);
-  // for(i = 2; i < argc && i < MAXARG; i++){
-  //   nargv[i-2] = argv[i];
+  // while(fork() != 0){
+  //   // parent
+  //   sleep(1);
   // }
-  // exec(nargv[0], nargv);
   exit(0);
 }

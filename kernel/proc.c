@@ -247,6 +247,7 @@ uchar initcode[] = {
 void
 userinit(void)
 {
+  // printf("userinit\n");
   struct proc *p;
 
   p = allocproc();
@@ -265,8 +266,9 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-  p->original_ticket = 1;
-  p->current_ticket = 1;
+  // p->original_ticket = 1;
+  // p->current_ticket = 1;
+  // p->time_slice = 0;
 
   release(&p->lock);
 }

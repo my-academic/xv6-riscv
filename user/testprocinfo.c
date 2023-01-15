@@ -32,8 +32,8 @@ int main(int argc, char *argv[])
     for (int i = 0; i < NPROC; i++)
     {
         //   printf("id = %d\t inuse = %d\t original ticket = %d\t current ticket = %d\t time slice=%d\n", pstat.pid[i], pstat.inuse[i], pstat.tickets_original[i], pstat.tickets_current[i], pstat.time_slices[i]);
-
-        printf("%d\t| %d\t| %d\t\t\t| %d\t\t\t| %d \n", pstat.pid[i], pstat.inuse[i], pstat.tickets_original[i], pstat.tickets_current[i], pstat.time_slices[i]);
+        if(pstat.inuse[i] != 0)
+            printf("%d\t| %d\t| %d\t\t\t| %d\t\t\t| %d \n", pstat.pid[i], pstat.inuse[i], pstat.tickets_original[i], pstat.tickets_current[i], pstat.time_slices[i]);
     }
 
     // while (fork() > 0)
