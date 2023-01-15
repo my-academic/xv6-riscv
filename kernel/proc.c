@@ -56,8 +56,9 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
-      p->original_ticket =  100;
-      p->current_ticket =  100;
+      p->original_ticket =  0;
+      p->current_ticket =  0;
+      p->time_slice = 0;
       p->kstack = KSTACK((int) (p - proc));
   }
 }
@@ -96,6 +97,7 @@ myproc(void)
 int
 allocpid()
 {
+  printf("allocpid\n");
   int pid;
   
   acquire(&pid_lock);
@@ -119,6 +121,7 @@ allocproc(void)
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
+      printf("in goto\n");
       goto found;
     } else {
       release(&p->lock);
@@ -129,6 +132,9 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->original_ticket = 1;
+  p->current_ticket = 1;
+  p->time_slice = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -160,6 +166,7 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  printf("freeproc\n");
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -174,8 +181,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
-  p->original_ticket = 100;
-  p->current_ticket = 100;
+  p->original_ticket = 0;
+  p->current_ticket = 0;
   p->time_slice = 0;
 }
 
@@ -258,6 +265,8 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->original_ticket = 1;
+  p->current_ticket = 1;
 
   release(&p->lock);
 }
@@ -457,6 +466,40 @@ uint64 randomNumber(uint64 seed, uint64 multiplier)
   // return a;
 }
 
+int randomf(int max)
+{
+
+    if (max <= 0)
+    {
+        return 1;
+    }
+
+    static int z1 = 12345; // 12345 for rest of zx
+    static int z2 = 12345; // 12345 for rest of zx
+    static int z3 = 12345; // 12345 for rest of zx
+    static int z4 = 12345; // 12345 for rest of zx
+
+    int b;
+    b = (((z1 << 6) ^ z1) >> 13);
+    z1 = (((z1 & 4294967294) << 18) ^ b);
+    b = (((z2 << 2) ^ z2) >> 27);
+    z2 = (((z2 & 4294967288) << 2) ^ b);
+    b = (((z3 << 13) ^ z3) >> 21);
+    z3 = (((z3 & 4294967280) << 7) ^ b);
+    b = (((z4 << 3) ^ z4) >> 12);
+    z4 = (((z4 & 4294967168) << 13) ^ b);
+
+    // if we have an argument, then we can use it
+    int rand = ((z1 ^ z2 ^ z3 ^ z4)) % max;
+
+    if (rand < 0)
+    {
+        rand = rand * -1;
+    }
+
+    return rand;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -480,31 +523,32 @@ scheduler(void)
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
-      total_ticket += (p->state == UNUSED ? 0 : p->current_ticket);
+      total_ticket += (p->state != RUNNABLE ? 0 : p->current_ticket);
       release(&p->lock);
     }
 
-    uint64 multiplier = 100;
-    int random = randomNumber(total_ticket, multiplier);
+    // uint64 multiplier = 10000000;
+    // int random = randomNumber(total_ticket, multiplier);
+    int random = randomf(total_ticket + 1);
     int probability_till_now = 0;
     // printf("total ticket = %d\n", total_ticket );
 
     for(p = proc, pr = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if((p->state == RUNNABLE || p->state == RUNNING)) {
+      if((p->state == RUNNABLE)) {
         pr = p;
       }
-      probability_till_now += p->current_ticket * multiplier / total_ticket;
+      probability_till_now += (p->state != RUNNABLE ? 0 : p->current_ticket);
 
       release(&p->lock);
       // printf("%d %d %d %d\n", p->current_ticket, probability_till_now, random, p->state);
-      if( (random < probability_till_now)) {
+      if( (random <= probability_till_now)) {
         // printf("in %d\n", pr->current_ticket);
         acquire(&pr->lock);
         pr->state = RUNNING;
         pr->time_slice++;
         pr->current_ticket--;
-        pr->current_ticket = pr->current_ticket <= 1 ? pr->original_ticket : pr->current_ticket;
+        pr->current_ticket = pr->current_ticket <= 0 ? pr->original_ticket : pr->current_ticket;
         c->proc = pr;
         swtch(&c->context, &pr->context);
 
@@ -530,7 +574,7 @@ scheduler(void)
       // }
       // release(&p->lock);
     }
-    // wait(30);
+    // for(int i = 0; i < 1000000000; i++);
   }
 }
 
@@ -750,7 +794,8 @@ int setticket(struct proc *p, int ticket) {
   if(ticket < 0) return -1;
   acquire(&p->lock);
   p->original_ticket = ticket;
-  p->current_ticket = ticket;
+  p->current_ticket = ticket -1;
+  p->time_slice = 0;
   release(&p->lock);
   return 0;
 }
@@ -760,18 +805,28 @@ int getpinfo(uint64 addr) {
   struct pstat pstat;
   struct proc *proc = myproc();
   for(struct proc *p = proc; p < &proc[NPROC]; p++){
+    printf("---\n");
     acquire(&p->lock);
-    // printf("%d %d\n", idx, p->pid);
+    printf("''''''''''''\n");
+      printf("index = %d\t id = %d\t inuse = %d\t original ticket = %d\t current ticket = %d\t time slice=%d\n", idx, p->pid, p->state, p->original_ticket, p->current_ticket, p->time_slice);
+    
     pstat.pid[idx] = p->pid ;
     pstat.inuse[idx] = !(p->state == UNUSED) ;
     pstat.tickets_original[idx] = p->original_ticket;
     pstat.tickets_current[idx] = p->current_ticket;
     pstat.time_slices[idx] = p->time_slice;
     idx++;
+    printf("here\n");
     release(&p->lock);
+    printf("here\n");
   }
+  printf("\n\n");
+  acquire(&proc->lock);
 
-  if (copyout(proc->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0)
+  if (copyout(proc->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0){
+    release(&proc->lock);
     return -1;
+  }
+  release(&proc->lock);
   return 0;
 }
